@@ -1,0 +1,354 @@
+Project StroyOptTorg {
+  database_type: 'PostgreSQL'
+  Note: 'Proposed MVP ERD. Field names map to Django models; review before migrations.'
+}
+
+Table users {
+  id bigint [pk, increment]
+  email varchar(254) [not null, unique]
+  password varchar(128) [not null, note: 'Django password hash']
+  full_name varchar(255) [not null]
+  phone varchar(32) [not null]
+  region varchar(120)
+  is_active boolean [not null, default: true]
+  is_staff boolean [not null, default: false]
+  is_superuser boolean [not null, default: false]
+  last_login timestamp
+  date_joined timestamp [not null]
+  privacy_accepted_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Custom AUTH_USER_MODEL. Django PermissionsMixin needs standard auth_group/auth_permission M2M tables.'
+}
+Table addresses {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  label varchar(100)
+  recipient_name varchar(255) [not null]
+  recipient_phone varchar(32) [not null]
+  city_id bigint [not null, ref: > cities.id]
+  street varchar(255) [not null]
+  building varchar(50) [not null]
+  apartment varchar(50)
+  postal_code varchar(20)
+  comment text
+  is_default boolean [not null, default: false]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    user_id
+  }
+}
+Table categories {
+  id bigint [pk, increment]
+  parent_id bigint [ref: > categories.id]
+  name varchar(255) [not null]
+  slug varchar(255) [not null, unique]
+  description text
+  image varchar(500)
+  sort_order int [not null, default: 0]
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    parent_id
+  }
+}
+Table brands {
+  id bigint [pk, increment]
+  name varchar(160) [not null, unique]
+  slug varchar(180) [not null, unique]
+  logo varchar(500)
+  description text
+  is_active boolean [not null, default: true]
+}
+Table products {
+  id bigint [pk, increment]
+  category_id bigint [not null, ref: > categories.id]
+  brand_id bigint [ref: > brands.id]
+  sku varchar(100) [not null, unique]
+  slug varchar(255) [not null, unique]
+  name varchar(500) [not null]
+  short_description text
+  description text
+  price decimal(12,2) [not null, note: '>= 0 RUB']
+  sale_price decimal(12,2) [note: 'nullable; >=0 and <= price']
+  stock_quantity int [not null, default: 0, note: '>= 0']
+  is_active boolean [not null, default: true]
+  is_featured boolean [not null, default: false]
+  is_hit boolean [not null, default: false]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    category_id
+    brand_id
+    (is_active, price)
+  }
+}
+Table product_images {
+  id bigint [pk, increment]
+  product_id bigint [not null, ref: > products.id]
+  image varchar(500) [not null]
+  alt_text varchar(255)
+  is_primary boolean [not null, default: false]
+  sort_order int [not null, default: 0]
+  indexes {
+    product_id
+  }
+}
+Table attributes {
+  id bigint [pk, increment]
+  name varchar(160) [not null]
+  slug varchar(160) [not null, unique]
+  unit varchar(40)
+  value_type varchar(12) [not null, default: 'OPTION', note: 'OPTION/TEXT/NUMBER']
+  is_filterable boolean [not null, default: true]
+  sort_order int [not null, default: 0]
+}
+Table attribute_options {
+  id bigint [pk, increment]
+  attribute_id bigint [not null, ref: > attributes.id]
+  value varchar(255) [not null]
+  sort_order int [not null, default: 0]
+  indexes {
+    (attribute_id, value) [unique]
+  }
+}
+Table product_attribute_values {
+  id bigint [pk, increment]
+  product_id bigint [not null, ref: > products.id]
+  attribute_id bigint [not null, ref: > attributes.id]
+  option_id bigint [ref: > attribute_options.id]
+  text_value varchar(255)
+  number_value decimal(14,3)
+  indexes {
+    (product_id, attribute_id) [unique]
+  }
+  Note: 'Validate exactly one matching value type; option must belong to attribute.'
+}
+Table carts {
+  id bigint [pk, increment]
+  user_id bigint [ref: > users.id]
+  session_key varchar(80) [unique]
+  promo_code_id bigint [ref: > promo_codes.id]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  Note: 'Exactly one of user_id/session_key; one active cart per user via partial unique index in Django.'
+}
+Table cart_items {
+  id bigint [pk, increment]
+  cart_id bigint [not null, ref: > carts.id]
+  product_id bigint [not null, ref: > products.id]
+  quantity int [not null, default: 1, note: '> 0']
+  added_at timestamp [not null]
+  indexes {
+    (cart_id, product_id) [unique]
+  }
+}
+Table favorites {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  product_id bigint [not null, ref: > products.id]
+  created_at timestamp [not null]
+  indexes {
+    (user_id, product_id) [unique]
+  }
+}
+Table comparison_items {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  product_id bigint [not null, ref: > products.id]
+  created_at timestamp [not null]
+  indexes {
+    (user_id, product_id) [unique]
+  }
+}
+Table promotions {
+  id bigint [pk, increment]
+  title varchar(255) [not null]
+  slug varchar(255) [not null, unique]
+  description text
+  cover_image varchar(500)
+  starts_at timestamp
+  ends_at timestamp
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+Table promo_codes {
+  id bigint [pk, increment]
+  code varchar(64) [not null, unique]
+  discount_type varchar(10) [not null, note: 'PERCENT/FIXED']
+  discount_value decimal(12,2) [not null]
+  min_order_amount decimal(12,2) [not null, default: 0]
+  usage_limit int
+  used_count int [not null, default: 0]
+  starts_at timestamp
+  ends_at timestamp
+  is_active boolean [not null, default: true]
+  created_at timestamp [not null]
+  Note: 'Validation: percent <=100, nonnegative amounts, limits and date window.'
+}
+Table cart_discount_tiers {
+  id bigint [pk, increment]
+  min_subtotal decimal(12,2) [not null, unique]
+  percent decimal(5,2) [not null]
+  is_active boolean [not null, default: true]
+}
+Table cities {
+  id bigint [pk, increment]
+  name varchar(160) [not null]
+  region varchar(160)
+  is_active boolean [not null, default: true]
+  indexes {
+    (name, region) [unique]
+  }
+}
+Table delivery_methods {
+  id bigint [pk, increment]
+  code varchar(24) [not null, unique, note: 'PICKUP/STORE_DELIVERY/CDEK_COURIER/CDEK_PVZ']
+  title varchar(160) [not null]
+  base_fee decimal(12,2) [not null, default: 0]
+  is_active boolean [not null, default: true]
+  sort_order int [not null, default: 0]
+}
+Table pickup_points {
+  id bigint [pk, increment]
+  city_id bigint [not null, ref: > cities.id]
+  delivery_method_id bigint [not null, ref: > delivery_methods.id]
+  name varchar(255) [not null]
+  external_code varchar(100)
+  address varchar(500) [not null]
+  is_active boolean [not null, default: true]
+  indexes {
+    city_id
+    delivery_method_id
+  }
+}
+Table orders {
+  id bigint [pk, increment]
+  order_number varchar(40) [not null, unique]
+  user_id bigint [ref: > users.id]
+  promo_code_id bigint [ref: > promo_codes.id]
+  delivery_method_id bigint [not null, ref: > delivery_methods.id]
+  city_id bigint [not null, ref: > cities.id]
+  pickup_point_id bigint [ref: > pickup_points.id]
+  status varchar(16) [not null, default: 'NEW', note: 'NEW/PROCESSING/COMPLETED/CANCELLED']
+  first_name varchar(120) [not null]
+  last_name varchar(120) [not null]
+  email varchar(254) [not null]
+  phone varchar(32) [not null]
+  company_name varchar(255)
+  delivery_address text
+  customer_comment text
+  payment_method varchar(32) [not null, note: 'ONLINE_CARD/CASH_ON_PICKUP/OTP_CREDIT/SBER_CREDIT']
+  subtotal decimal(12,2) [not null]
+  tier_discount decimal(12,2) [not null, default: 0]
+  promo_discount decimal(12,2) [not null, default: 0]
+  delivery_fee decimal(12,2) [not null, default: 0]
+  grand_total decimal(12,2) [not null]
+  idempotency_key varchar(80) [unique]
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+  indexes {
+    user_id
+    status
+    created_at
+  }
+  Note: 'Immutable checkout snapshots; order_number unique; guest orders have null user.'
+}
+Table order_items {
+  id bigint [pk, increment]
+  order_id bigint [not null, ref: > orders.id]
+  product_id bigint [ref: > products.id]
+  product_name varchar(500) [not null]
+  product_sku varchar(100) [not null]
+  quantity int [not null, note: '>0']
+  unit_price decimal(12,2) [not null]
+  line_total decimal(12,2) [not null]
+  indexes {
+    order_id
+  }
+}
+Table payment_attempts {
+  id bigint [pk, increment]
+  order_id bigint [not null, ref: > orders.id]
+  provider varchar(80)
+  external_id varchar(160)
+  amount decimal(12,2) [not null]
+  status varchar(16) [not null, default: 'PENDING', note: 'PENDING/PAID/FAILED/CANCELLED']
+  paid_at timestamp
+  created_at timestamp [not null]
+  indexes {
+    order_id
+  }
+}
+Table articles {
+  id bigint [pk, increment]
+  title varchar(255) [not null]
+  slug varchar(255) [not null, unique]
+  excerpt text
+  body text [not null]
+  cover_image varchar(500)
+  is_published boolean [not null, default: false]
+  published_at timestamp
+  created_at timestamp [not null]
+  updated_at timestamp [not null]
+}
+Table faqs {
+  id bigint [pk, increment]
+  question varchar(500) [not null]
+  answer text [not null]
+  sort_order int [not null, default: 0]
+  is_published boolean [not null, default: true]
+}
+Table reviews {
+  id bigint [pk, increment]
+  user_id bigint [ref: > users.id]
+  product_id bigint [ref: > products.id]
+  author_name varchar(255) [not null]
+  rating int [not null, note: '1..5']
+  text text [not null]
+  is_approved boolean [not null, default: false]
+  created_at timestamp [not null]
+  indexes {
+    product_id
+    is_approved
+  }
+}
+Table static_pages {
+  id bigint [pk, increment]
+  slug varchar(255) [not null, unique]
+  title varchar(255) [not null]
+  body text [not null]
+  is_published boolean [not null, default: true]
+  updated_at timestamp [not null]
+}
+Table banners {
+  id bigint [pk, increment]
+  title varchar(255) [not null]
+  image varchar(500) [not null]
+  target_url varchar(500)
+  placement varchar(80) [not null, default: 'HOME']
+  sort_order int [not null, default: 0]
+  is_active boolean [not null, default: true]
+  starts_at timestamp
+  ends_at timestamp
+}
+Table callback_requests {
+  id bigint [pk, increment]
+  name varchar(255) [not null]
+  phone varchar(32) [not null]
+  product_id bigint [ref: > products.id]
+  comment text
+  status varchar(16) [not null, default: 'NEW', note: 'NEW/CONTACTED/CLOSED']
+  privacy_accepted_at timestamp
+  created_at timestamp [not null]
+}
+Table newsletter_subscriptions {
+  id bigint [pk, increment]
+  email varchar(254) [not null, unique]
+  is_active boolean [not null, default: true]
+  subscribed_at timestamp [not null]
+  unsubscribed_at timestamp
+}
